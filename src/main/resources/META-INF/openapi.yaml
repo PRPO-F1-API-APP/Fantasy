@@ -1,0 +1,264 @@
+openapi: 3.0.3
+info:
+  title: Fantasy F1 API
+  version: 1.0.0
+  description: >
+    Igralci napovedo top 3 dirkače posamezne dirke. Ko je dirka končana,
+    se točke izračunajo in prištejejo na sezonsko lestvico.
+
+tags:
+  - name: Igralci
+    description: Upravljanje igralcev
+  - name: Napovedi
+    description: Napovedi top 3 za posamezno dirko
+  - name: Dirke
+    description: Vnos rezultatov dirke (kliče Agregator API)
+  - name: Lestvica
+    description: Sezonski seštevek točk
+
+paths:
+  /igralci:
+    get:
+      tags: [Igralci]
+      summary: Vrni vse igralce
+      operationId: getAllIgralci
+      responses:
+        '200':
+          description: Seznam igralcev
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Igralec'
+    post:
+      tags: [Igralci]
+      summary: Ustvari novega igralca
+      operationId: createIgralec
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Igralec'
+      responses:
+        '200':
+          description: Igralec ustvarjen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Igralec'
+
+  /igralci/{igralecId}:
+    get:
+      tags: [Igralci]
+      summary: Vrni enega igralca
+      operationId: getIgralec
+      parameters:
+        - $ref: '#/components/parameters/IgralecId'
+      responses:
+        '200':
+          description: Najden igralec
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Igralec'
+        '404':
+          description: Igralec ne obstaja
+
+  /dirke/{dirkaId}/napovedi:
+    get:
+      tags: [Napovedi]
+      summary: Vrni vse napovedi za dirko
+      operationId: getNapovediZaDirko
+      parameters:
+        - $ref: '#/components/parameters/DirkaId'
+      responses:
+        '200':
+          description: Seznam napovedi
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Napoved'
+    post:
+      tags: [Napovedi]
+      summary: Oddaj napoved top 3 za dirko
+      operationId: createNapoved
+      parameters:
+        - $ref: '#/components/parameters/DirkaId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Napoved'
+      responses:
+        '200':
+          description: Napoved shranjena
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Napoved'
+        '400':
+          description: Neveljavna napoved (npr. isti dirkač dvakrat)
+        '409':
+          description: Dirka je že končana ali je igralec že oddal napoved
+
+  /dirke/{dirkaId}/rezultat:
+    post:
+      tags: [Dirke]
+      summary: Vnesi končni rezultat dirke in preračunaj točke
+      description: >
+        Kliče ga Agregator API, ko je dirka končana. Storitev oceni vse napovedi
+        za to dirko in prišteje točke na sezonsko lestvico.
+      operationId: vnesiRezultat
+      parameters:
+        - $ref: '#/components/parameters/DirkaId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RezultatDirke'
+      responses:
+        '200':
+          description: Točke so prištete, vrne posodobljeno lestvico
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VnosLestvice'
+        '409':
+          description: Rezultat za to dirko je že vnesen
+
+  /lestvica:
+    get:
+      tags: [Lestvica]
+      summary: Vrni sezonsko lestvico (urejeno po točkah)
+      operationId: getLestvica
+      responses:
+        '200':
+          description: Lestvica
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VnosLestvice'
+
+components:
+  parameters:
+    IgralecId:
+      name: igralecId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    DirkaId:
+      name: dirkaId
+      in: path
+      required: true
+      schema:
+        type: string
+        example: brazil-2026
+
+  schemas:
+    Igralec:
+      type: object
+      required:
+        - uporabniskoIme
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+          example: 1
+        uporabniskoIme:
+          type: string
+          example: janez123
+        ime:
+          type: string
+          example: Janez
+        priimek:
+          type: string
+          example: Novak
+
+    Napoved:
+      type: object
+      required:
+        - igralecId
+        - p1
+        - p2
+        - p3
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        igralecId:
+          type: integer
+          format: int64
+          example: 1
+        dirkaId:
+          type: string
+          readOnly: true
+          example: brazil-2026
+        p1:
+          $ref: '#/components/schemas/Dirkac'
+        p2:
+          $ref: '#/components/schemas/Dirkac'
+        p3:
+          $ref: '#/components/schemas/Dirkac'
+        dvojnoMesto:
+          type: string
+          enum: [P1, P2, P3]
+          description: >
+            DOUBLE - mesto, katerega dirkaču se podvojijo točke.
+            Podvojiti se da največ enega dirkača; če polja ni, ni podvojitve.
+          example: P2
+        tocke:
+          type: integer
+          readOnly: true
+          description: Izračunane točke (null, dokler dirka ni končana)
+          example: 20
+
+    RezultatDirke:
+      type: object
+      required:
+        - p1
+        - p2
+        - p3
+      properties:
+        p1:
+          $ref: '#/components/schemas/Dirkac'
+        p2:
+          $ref: '#/components/schemas/Dirkac'
+        p3:
+          $ref: '#/components/schemas/Dirkac'
+
+    VnosLestvice:
+      type: object
+      properties:
+        mesto:
+          type: integer
+          example: 1
+        igralecId:
+          type: integer
+          format: int64
+          example: 1
+        uporabniskoIme:
+          type: string
+          example: janez123
+        tocke:
+          type: integer
+          example: 135
+
+    Dirkac:
+      type: string
+      description: Tričrkovna oznaka dirkača
+      pattern: '^[A-Z]{3}$'
+      example: VER
